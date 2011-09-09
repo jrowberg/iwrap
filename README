@@ -1,0 +1,14 @@
+The raw, partial, VERY NOT FINISHED beginnings of my feature-complete iWRAP library!
+
+Don't look for lots of documentation here yet...it's not done. The demo code is written and tested in Arduino 1.0 beta3. It should probably work in Arduino 0022 as well, with the .pde extension instead.
+
+Check out the iWRAPDemo.ino file for a taste of what is possible with this code. Most of the functions aren't done, but here's the idea:
+
+- Non-blocking communication
+- Event-driven approach
+- Internals are as invisible as possible
+- Maximum flexibility
+
+I'm writing this specifically for my own needs, which center around the HID profile, but I'm attempting to build everything else into it at the same time. SPP is the second-most important to me, and all the rest comes later. Hopefully.
+
+Stay tuned!
