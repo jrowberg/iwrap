@@ -11,4 +11,6 @@ Check out the iWRAPDemo.ino file for a taste of what is possible with this code.
 
 I'm writing this specifically for my own needs, which center around the HID profile, but I'm attempting to build everything else into it at the same time. SPP is the second-most important to me, and all the rest comes later. Hopefully.
 
+The next immediate thing on the to-do list is pairing and connection management, which should be quite doable given the data structures I have in place.
+
 Stay tuned!
