@@ -1,6 +1,6 @@
-// iWRAP class demonstration Arduino sketch
-// 8/31/2011 by Jeff Rowberg <jeff@rowberg.net>
-// Updates should (hopefully) always be available at https://github.com/jrowberg
+// Bluegiga iWRAP interface library demonstration Arduino sketch
+// 9/11/2011 by Jeff Rowberg <jeff@rowberg.net>
+// Updates should (hopefully) always be available at https://github.com/jrowberg/iwrap
 
 /* ============================================
 iWRAP library code is placed under the MIT license
@@ -41,8 +41,14 @@ THE SOFTWARE.
 iWRAP wt12(&Serial1, &Serial);
 
 #define LED_PIN 13
+bool linkActive = false;
 bool blinkState = false;
-uint8_t ch;
+uint16_t tick = 0;
+uint8_t ch = 0;
+
+// variables for fun mouse cursor circle tracking
+int8_t x = -16, y = 0;
+int8_t xDir = 1, yDir = -1;
 
 void setup() {
     pinMode(LED_PIN, OUTPUT);
@@ -58,6 +64,8 @@ void setup() {
     // assign special busy/idle callbacks because...well...because we can
     wt12.onBusy(onModuleBusy);
     wt12.onIdle(onModuleIdle);
+    wt12.onRing(onModuleRing);
+    wt12.onNoCarrier(onModuleNoCarrier);
 
     // make sure we end any incomplete lines in the WT12 buffer
     Serial1.print("\r\n");
@@ -102,6 +110,10 @@ void setup() {
     Serial.println(wt12.config.btName);
     Serial.print("+ BT IDENT description=");
     Serial.println(wt12.config.btIdentDescription);
+    Serial.print("+ UART baud rate=");
+    Serial.println(wt12.config.uartBaudRate);
+    Serial.print("+ Current pairing count=");
+    Serial.println(wt12.config.btPairCount);
 }
 
 void loop() {
@@ -113,13 +125,49 @@ void loop() {
     // anything that comes in; you must either call this often or else manage
     // reading the data yourself and send it to the parse() method. This method
     // makes a non-blocking implementation easy though.)
-    while (wt12.checkActivity()) { digitalWrite(LED_PIN, LOW); }
+    while (wt12.checkActivity());
+    
+    tick++;
+    if (++tick % 8192 == 0 && linkActive) { // tick wraps at 65535 automatically
+        digitalWrite(LED_PIN, blinkState ? HIGH : LOW);
+        blinkState = !blinkState;
+    }
+    if (tick % 2048 == 0 && linkActive) {
+        // send data bytes to move the mouse cursor
+        // (continuous small circles, a.k.a. "drunk mouse")
+        Serial1.write(0x9f);
+        Serial1.write(0x05);
+        Serial1.write(0xa1);
+        Serial1.write(0x02);
+        Serial1.write((uint8_t)0x00);
+        Serial1.write((int8_t)x);
+        Serial1.write((int8_t)y);
+
+        // poor man's ugly sine wave generator
+        if (xDir == -1) x--; else x++;
+        if (yDir == -1) y--; else y++;
+        if (x == -16 || x == 16) xDir = -xDir;
+        if (y == -16 || y == 16) yDir = -yDir;
+    }
 }
 
 void onModuleIdle() {
+    // turn indicator LED on
     digitalWrite(LED_PIN, HIGH);
 }
 
 void onModuleBusy() {
+    // turn indicator LED off
     digitalWrite(LED_PIN, LOW);
+}
+
+void onModuleRing() {
+    // enable blinking indicator
+    delay(1000); // delay to let link "settle" (research?)
+    linkActive = true;
+}
+
+void onModuleNoCarrier() {
+    // disable blinking indicator
+    linkActive = false;
 }

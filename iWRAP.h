@@ -1,8 +1,9 @@
-// Keyglove controller source code - Bluegiga iWRAP interface class library
-// 8/5/2011 by Jeff Rowberg <jeff@rowberg.net>
+// Bluegiga iWRAP interface library
+// 9/11/2011 by Jeff Rowberg <jeff@rowberg.net>
+// Updates should (hopefully) always be available at https://github.com/jrowberg/iwrap
 
 /* ============================================
-Controller code is placed under the MIT license
+iWRAP library code is placed under the MIT license
 Copyright (c) 2011 Jeff Rowberg
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -558,7 +559,7 @@ class iWRAPConfig {
         uint16_t batteryMask;
 
         // SET CONTROL BAUD
-        uint16_t uartBaudRate;
+        uint32_t uartBaudRate;
         uint8_t uartDataBits;
         uint8_t uartStopBits;
         uint8_t uartParity;

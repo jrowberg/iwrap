@@ -1,8 +1,9 @@
-// Keyglove controller source code - Bluegiga iWRAP interface class library
-// 8/5/2011 by Jeff Rowberg <jeff@rowberg.net>
+// Bluegiga iWRAP interface library
+// 9/11/2011 by Jeff Rowberg <jeff@rowberg.net>
+// Updates should (hopefully) always be available at https://github.com/jrowberg/iwrap
 
 /* ============================================
-Controller code is placed under the MIT license
+iWRAP library code is placed under the MIT license
 Copyright (c) 2011 Jeff Rowberg
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -536,7 +537,7 @@ void iWRAP::parse(uint8_t ch) {
                             config.batteryMask = strtol(p, NULL, 16);
                         } else if (strncmp(test + 12, "BAUD ", 5) == 0) {
                             // SET CONTROL BAUD
-                            //uint16_t uartBaudRate;
+                            //uint32_t uartBaudRate;
                             //uint8_t uartDataBits;
                             //uint8_t uartStopBits;
                             //uint8_t uartParity;
@@ -1440,14 +1441,7 @@ void iWRAP::move(uint8_t x, uint8_t y) {
 }
 
 void iWRAP::move(uint8_t x, uint8_t y, uint8_t z) {
-    uModule -> write(0x9f);
-    uModule -> write(0x06);
-    uModule -> write(0xa1);
-    uModule -> write(0x02);
-    uModule -> write(mouse_buttons);
-    uModule -> write(x);
-    uModule -> write(y);
-    uModule -> write(z);
+    move(x, y); // no z functionality yet
 }
 
 void iWRAP::scroll(uint8_t s) {
