@@ -4,7 +4,7 @@
 
 /* ============================================
 iWRAP library code is placed under the MIT license
-Copyright (c) 2011 Jeff Rowberg
+Copyright (c) 2012 Jeff Rowberg
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -30,94 +30,193 @@ THE SOFTWARE.
 // hardware serial ports. The default "Serial" object is used to communicate
 // with the host PC connected to the board via USB, while the "Serial1" object
 // is used to communicate with a Bluegiga WT12 iWRAP4 module. The WT12 needs
-// only 4 connections:
+// a total of 6 connections for most efficient event-driven management
 //
 // WT12 GND -> Arduino GND
-// WT12 VDD -> Arduino 3.3v (make SURE this is 3.3v, and not 5V)
+// WT12 VDD -> Arduino 3.3v (make SURE this is 3.3v, and not 5v)
 // WT12 RXD -> Arduino TX1 (pin 18)
 // WT12 TXD -> Arduino RX1 (pin 19)
+// WT12 PIO6 -> Arduino INT6
+// WT12 PIO7 -> Arduino INT7
+//
+// If you are using the Teensy++ 2.0 board instead, the pins are as follows:
+//
+// WT12 GND -> Teensy++ GND
+// WT12 VDD -> Teensy++ VCC (make SURE the Teensy++ is converted to 3.3v!)
+// WT12 RXD -> Teensy++ TX1 (pin 18)
+// WT12 TXD -> Teensy++ RX1 (pin 19)
+// WT12 PIO6 -> Teensy++ INT6 (PE6)
+// WT12 PIO7 -> Teensy++ INT7 (PE7)
 
 #include "iWRAP.h"
-iWRAP wt12(&Serial1, &Serial);
+HardwareSerial Serial1 = HardwareSerial();
+iWRAP wt12(&Serial1, (HardwareSerial *)&Serial);
 
-#define LED_PIN 13
-bool linkActive = false;
-bool blinkState = false;
-uint16_t tick = 0;
-uint8_t ch = 0;
+#define LED_PIN 6 // Arduino Mega = 13, Teensy++ = 6
+
+#define DTR_PIN 18
+#define LINK_PIN 19
+#define LINK_INT 7
 
 // variables for fun mouse cursor circle tracking
 int8_t x = -16, y = 0;
 int8_t xDir = 1, yDir = -1;
 
+// variables for detecting mode and link status
+bool linkActive = false;
+bool dataMode = false;
+
+// variables and interrupt routine for 10ms timer (simple LED blinking control)
+volatile uint8_t timer1Overflow = 0;
+uint8_t tick = 0;
+ISR(TIMER1_OVF_vect) {
+    timer1Overflow++;
+}
+
 void setup() {
+    // initialize pins
     pinMode(LED_PIN, OUTPUT);
+    pinMode(DTR_PIN, OUTPUT);
+    pinMode(LINK_PIN, INPUT);
+    digitalWrite(DTR_PIN, LOW);
     digitalWrite(LED_PIN, LOW);
 
+    // setup internal 100Hz "tick" interrupt
+    // thanks to http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1212098919 (and 'bens')
+    // also, lots of timer info here and here:
+    //    http://www.avrfreaks.net/index.php?name=PNphpBB2&file=viewtopic&t=50106
+    //    http://www.avrbeginners.net/architecture/timers/timers.html
+    TCCR1A = 1; // set TIMER1 overflow at 8-bit max (0xFF)
+    TCCR1B = 1; // no prescaler
+    TCNT1 = 0; // clear TIMER1 counter
+    TIFR1 |= (1 << TOV1); // clear the TIMER1 overflow flag
+    TIMSK1 |= (1 << TOIE1); // enable TIMER1 overflow interrupts
+
     // initialize serial communication with host
-    Serial.begin(115200);
-    
+    Serial.begin(38400);
+
     // initialize iWRAP device
     Serial.println("Initializing iWRAP Bluetooth device serial connection...");
-    Serial1.begin(115200);
+    Serial1.begin(38400);
 
     // assign special busy/idle callbacks because...well...because we can
     wt12.onBusy(onModuleBusy);
     wt12.onIdle(onModuleIdle);
-    wt12.onRing(onModuleRing);
-    wt12.onNoCarrier(onModuleNoCarrier);
 
-    // make sure we end any incomplete lines in the WT12 buffer
-    Serial1.print("\r\n");
+    // assign manual control of entering/exiting data mode (uses DTR_PIN)
+    wt12.onSelectLink(onModuleSelectLink);
+    wt12.onExitDataMode(onModuleExitDataMode);
 
-    // reset iWRAP
-    Serial.println("Rebooting iWRAP device...");
+    // watch for READY event to further track command mode status
+    wt12.onReady(onModuleReady);
+
+    // enable local module -> PC passthrough echo for fun/debugging
     wt12.setEchoModuleOutput(true);
-    wt12.resetDevice();
-    while (wt12.checkActivity());
+    
+    // check for already active link
+    if (digitalRead(LINK_PIN)) {
+        linkActive = true;
+        Serial.println("Device appears to have active data connection!");
+        wt12.setDeviceMode(IWRAP_MODE_DATA);
+    }
 
     // get all configuration parameters and wait for completion
     Serial.println("Reading iWRAP configuration...");
     wt12.readDeviceConfig();
-    while (wt12.checkActivity());
-
-    // enable HID profile if necessary
-    if (!wt12.config.profileHIDEnabled) {
-        Serial.println("Enabling HID profile...");
-        wt12.setProfile("HID", "iWRAP Demo Device");
-        while (wt12.checkActivity());
-        if (wt12.checkError()) {
-            Serial.println("Uh oh, that didn't work out so well.");
+    while (wt12.checkActivity(1000));
+    if (wt12.checkError()) {
+        Serial.println("iWRAP config read generated a syntax error, trying again...");
+        wt12.readDeviceConfig();
+        while (wt12.checkActivity(1000));
+    }
+    if (wt12.checkError() || wt12.checkTimeout()) {
+        Serial.println("iWRAP config could not be read. Baud rate may be incorrect, or iWRAP stuck in DATA mode?");
+    } else {
+        // get list of active links
+        Serial.println("Reading list link configuration...");
+        wt12.readLinkConfig();
+        while (wt12.checkActivity(1000));
+        
+        // enable HID profile if necessary
+        if (!wt12.config.profileHIDEnabled) {
+            Serial.println("Enabling HID profile...");
+            wt12.setProfile("HID", "iWRAP Demo Device");
+            while (wt12.checkActivity(1000));
+            if (wt12.checkError()) {
+                Serial.println("Uh oh, that didn't work out so well.");
+            } else {
+                Serial.println("Rebooting iWRAP device again to activate profile...");
+                wt12.resetDevice();
+                while (wt12.checkActivity());
+                Serial.println("Re-reading iWRAP configuration...");
+                wt12.readDeviceConfig();
+                while (wt12.checkActivity(1000));
+            }
         } else {
-            Serial.println("Rebooting iWRAP device again to activate profile...");
-            wt12.resetDevice();
-            while (wt12.checkActivity());
-            Serial.println("Re-reading iWRAP configuration...");
-            wt12.readDeviceConfig();
-            while (wt12.checkActivity());
+            Serial.println("Detected HID profile already enabled");
+        }
+
+        // set device name for demo
+        Serial.println("Setting device name...");
+        wt12.setDeviceName("WT12 iWRAP Demo");
+        while (wt12.checkActivity(1000));
+
+        // set device identity for demo
+        Serial.println("Setting device identity...");
+        wt12.setDeviceIdentity("Arduino iWRAPdemo Sketch");
+        while (wt12.checkActivity(1000));
+
+        // set device class to KB/mouse
+        Serial.println("Setting device class to keyboard/mouse...");
+        wt12.setDeviceClass(0x05C0);
+        while (wt12.checkActivity(1000));
+
+        // set SSP mode to 3 0
+        Serial.println("Setting Secure Simple Pairing (SSP) mode to 3/0...");
+        wt12.setDeviceSSP(3, 0);
+        while (wt12.checkActivity(1000));
+
+        // enable CD pair notification on GPIO pin 7
+        Serial.println("Enabling GPIO7 toggling on Carrier Detect (link active mode)...");
+        wt12.setCarrierDetect(0x80, 0);
+        while (wt12.checkActivity(1000));
+
+        // enable GPIO pin 7 interrupt detection
+        Serial.println("Attaching interrupt to Carrier Detect pin change (GPIO7)...");
+        attachInterrupt(LINK_INT, onLinkChange, CHANGE);
+
+        // enable DTR escape control on GPIO pin 6
+        Serial.println("Enabling GPIO6 DTR detection for entering command mode (ESCAPE char disabled)...");
+        wt12.setControlEscape('-', 0x40, 1);
+        while (wt12.checkActivity(1000));
+
+        // output some info to prove we read the config correctly
+        Serial.print("+ BT address=");
+        Serial.print(wt12.config.btAddress.address[0], HEX); Serial.print(" ");
+        Serial.print(wt12.config.btAddress.address[1], HEX); Serial.print(" ");
+        Serial.print(wt12.config.btAddress.address[2], HEX); Serial.print(" ");
+        Serial.print(wt12.config.btAddress.address[3], HEX); Serial.print(" ");
+        Serial.print(wt12.config.btAddress.address[4], HEX); Serial.print(" ");
+        Serial.println(wt12.config.btAddress.address[5], HEX);
+        Serial.print("+ BT name=");
+        Serial.println(wt12.config.btName);
+        Serial.print("+ BT IDENT description=");
+        Serial.println(wt12.config.btIdentDescription);
+        Serial.print("+ UART baud rate=");
+        Serial.println(wt12.config.uartBaudRate);
+        Serial.print("+ Current pairing count=");
+        Serial.println(wt12.config.btPairCount);
+
+        if (digitalRead(LINK_PIN)) {
+            Serial.println("Switching back to data mode for previously active link...");
+            wt12.selectDataMode((uint8_t)0); // use default link since we don't know what it was
+            while (wt12.checkActivity(1000));
         }
     }
-
-    // output some info to prove we read the config correctly
-    Serial.print("+ BT address=");
-    Serial.print(wt12.config.btAddress.address[0], HEX); Serial.print(" ");
-    Serial.print(wt12.config.btAddress.address[1], HEX); Serial.print(" ");
-    Serial.print(wt12.config.btAddress.address[2], HEX); Serial.print(" ");
-    Serial.print(wt12.config.btAddress.address[3], HEX); Serial.print(" ");
-    Serial.print(wt12.config.btAddress.address[4], HEX); Serial.print(" ");
-    Serial.println(wt12.config.btAddress.address[5], HEX);
-    Serial.print("+ BT name=");
-    Serial.println(wt12.config.btName);
-    Serial.print("+ BT IDENT description=");
-    Serial.println(wt12.config.btIdentDescription);
-    Serial.print("+ UART baud rate=");
-    Serial.println(wt12.config.uartBaudRate);
-    Serial.print("+ Current pairing count=");
-    Serial.println(wt12.config.btPairCount);
 }
 
 void loop() {
-    // passthrough from PC to iWRAP for debugging or manual control
+    // passthrough from host to iWRAP for debugging or manual control
     while (Serial.available()) Serial1.write(Serial.read());
 
     // check for module activity
@@ -126,48 +225,83 @@ void loop() {
     // reading the data yourself and send it to the parse() method. This method
     // makes a non-blocking implementation easy though.)
     while (wt12.checkActivity());
-    
-    tick++;
-    if (++tick % 8192 == 0 && linkActive) { // tick wraps at 65535 automatically
-        digitalWrite(LED_PIN, blinkState ? HIGH : LOW);
-        blinkState = !blinkState;
-    }
-    if (tick % 2048 == 0 && linkActive) {
-        // send data bytes to move the mouse cursor
-        // (continuous small circles, a.k.a. "drunk mouse")
-        Serial1.write(0x9f);
-        Serial1.write(0x05);
-        Serial1.write(0xa1);
-        Serial1.write(0x02);
-        Serial1.write((uint8_t)0x00);
-        Serial1.write((int8_t)x);
-        Serial1.write((int8_t)y);
 
-        // poor man's ugly sine wave generator
-        if (xDir == -1) x--; else x++;
-        if (yDir == -1) y--; else y++;
-        if (x == -16 || x == 16) xDir = -xDir;
-        if (y == -16 || y == 16) yDir = -yDir;
+    // check for TIMER1 overflow limit and increment tick (should be every 10 ms)
+    // 156 results in 9.937 ms, 157 results in 10.001 ms
+    if (timer1Overflow >= 157) {
+        timer1Overflow = 0;
+        if (++tick >= 100) tick = 0;
+        if (linkActive) {
+            if (dataMode) {
+                digitalWrite(LED_PIN, HIGH);
+            } else {
+                digitalWrite(LED_PIN, (tick % 25) < 13 ? HIGH : LOW);
+            }
+        } else {
+            digitalWrite(LED_PIN, tick < 50 ? HIGH : LOW);
+        }
+
+        /*
+        if (tick == 10) {
+            // send data bytes to move the mouse cursor
+            // (continuous small circles, a.k.a. "drunk mouse")
+            Serial1.write(0x9f);
+            Serial1.write(0x05);
+            Serial1.write(0xa1);
+            Serial1.write(0x02);
+            Serial1.write((uint8_t)0x00);
+            Serial1.write((int8_t)x);
+            Serial1.write((int8_t)y);
+
+            // poor man's ugly sine wave generator
+            if (xDir == -1) x--; else x++;
+            if (yDir == -1) y--; else y++;
+            if (x == -16 || x == 16) xDir = -xDir;
+            if (y == -16 || y == 16) yDir = -yDir;
+        }
+        */
     }
+}
+
+void onModuleExitDataMode() {
+    Serial.println("Exiting data mode...");
+    digitalWrite(DTR_PIN, LOW);
+    delayMicroseconds(50);
+    digitalWrite(DTR_PIN, HIGH);
+    wt12.setDeviceMode(IWRAP_MODE_COMMAND);
+    while (wt12.checkActivity(200));
+    dataMode = false;
+}
+void onModuleSelectLink(iWRAPLink *link) {
+    Serial.print("Selecting link ");
+    Serial.println(link -> link_id);
+    dataMode = true;
 }
 
 void onModuleIdle() {
-    // turn indicator LED on
-    digitalWrite(LED_PIN, HIGH);
+    // no command in progress
 }
 
 void onModuleBusy() {
-    // turn indicator LED off
-    digitalWrite(LED_PIN, LOW);
+    // command in progress
 }
 
-void onModuleRing() {
-    // enable blinking indicator
-    delay(1000); // delay to let link "settle" (research?)
-    linkActive = true;
+void onModuleReady() {
+    // entered COMMAND mode, e.g. after a reset or DTR toggle
+    Serial.println("iWRAP is in command mode, ready for control");
+    dataMode = false;
 }
 
-void onModuleNoCarrier() {
-    // disable blinking indicator
-    linkActive = false;
+void onLinkChange() {
+    if (digitalRead(LINK_PIN) == HIGH) {
+        // changed from LOW to HIGH
+        //Serial.println("Active link detected, entering data mode...");
+        linkActive = true;
+        //dataMode = true;
+    } else {
+        // changed from HIGH to LOW
+        Serial.println("All links closed, exiting data mode...");
+        linkActive = false;
+        dataMode = false;
+    }
 }
