@@ -335,6 +335,7 @@ void iWRAP::setEchoModuleOutput(bool enabled) {
 void iWRAP::parse(uint8_t ch) {
     // echo to output UART if enabled
     if (echoModuleOutput && uOutput) uOutput -> write(ch);
+    //uOutput -> print(ch, HEX);
 
     // automatically detect MUX mode if we need to
     if (!firstDataRead && config.mode != IWRAP_MODE_MUX && bufferPos > 1 && (buffer[bufferPos - 2] & 0xFF) == 0xBF && (ch & 0xFC) == 0x00) {
@@ -862,24 +863,132 @@ void iWRAP::parse(uint8_t ch) {
                         if (expectedRows == 0) {
                             // result count, this is the first line returned
                             expectedRows = test[5] - 0x30;
+                            config.btLinkCount = expectedRows;
                         } else {
                             // list entry, one per line
+                            // LIST {link_id} CONNECTED {mode} {blocksize} 0 0 {elapsed_time} {local_msc} {remote_msc} {addr} {channel} {direction} {powermode} {role} {crypt} {buffer} [ERETX]
                             expectedRows--;
                             uint8_t link_id = test[5] - 0x30;
                             iWRAPLink *link;
                             if (config.btLink[link_id] != 0) {
                                 // reuse existing pair object and overwrite
                                 link = config.btLink[link_id];
+                                if (link -> profile != 0) free(link -> profile);
+                                link -> profile = 0;
                             } else {
                                 // create new pair object
                                 link = (iWRAPLink *)malloc(sizeof(iWRAPLink));
+                                link -> link_id = link_id;
                                 config.btLink[link_id] = link;
                             }
-                            test += 7;
-                            //link -> address.parseHexAddress(test + 12);
-                            //strncpy(pair -> key, test + 30, 32);
-                            //link -> key[32] = 0;
-                            config.btLinkCount++;
+
+                            char *p, *p2;
+                            p = test + 17; // *p is now at beginning of {mode} (or {profile}?)
+
+                            // DOCS SAY {mode} BUT OBSERVED ITEM IS {profile} ???
+
+                            p2 = strchr(p, ' ');
+                            link -> profile = (char *)malloc((p2 - p) + 1);
+                            strncpy(link -> profile, p, p2 - p);
+                            link -> profile[p2 - p] = 0;
+                            p = p2 + 1;
+
+                            /*
+                            // {mode} = RFCOMM | L2CAP | SCO
+                            if (p[0] == 'R') {
+                                link -> mode = IWRAP_LINK_MODE_RFCOMM;
+                                p += 7;
+                            } else if (p[0] == 'L') {
+                                link -> mode = IWRAP_LINK_MODE_L2CAP;
+                                p += 6;
+                            } else {
+                                link -> mode = IWRAP_LINK_MODE_SCO;
+                                p += 4;
+                            }
+                            */
+
+                            // {blocksize} = RFCOMM, L2CAP or SCO data packet size, that is, how many bytes of data can be sent in one packet
+                            link -> blocksize = strtol(p, &p, 10);
+                            p += 5;
+
+                            // {elapsed_time} = Link life time in seconds
+                            link -> elapsed_time = strtol(p, &p, 10);
+                            p++;
+
+                            // {local_msc} = Local serial port modem status control (MSC) bits
+                            link -> local_msc = strtol(p, &p, 10);
+                            p++;
+
+                            // {remote_msc} = Remote serial port modem status control (MSC) bits
+                            link -> remote_msc = strtol(p, &p, 10);
+                            p++;
+
+                            // {addr} = Bluetooth device address of the remote device
+                            link -> addr.parseHexAddress(p);
+                            p+= 18;
+
+                            // {channel} = RFCOMM channel or L2CAP psm number at remote device
+                            link -> channel = strtol(p, &p, 10);
+                            p++;
+
+                            // {direction} = Direction of the link. The possible values are:
+                            //   OUTGOING - The connection has been initiated by the local device.
+                            //   INCOMING - The connection has been initiated by the remote device
+                            if (p[0] == 'O') {
+                                link -> direction = IWRAP_LINK_DIRECTION_OUTGOING;
+                            } else {
+                                link -> direction = IWRAP_LINK_DIRECTION_INCOMING;
+                            }
+                            p += 9;
+
+                            // {powermode} = mode for the link. The possible values are:
+                            //   ACTIVE - Connection is in active mode, no power saving in use
+                            //   SNIFF - Connection is in sniff mode
+                            //   HOLD - Connection is in hold mode
+                            //   PARK - Connection is in park mode
+                            if (p[0] == 'A') {
+                                link -> powermode = IWRAP_LINK_POWERMODE_ACTIVE;
+                                p += 7;
+                            } else if (p[0] == 'S') {
+                                link -> powermode = IWRAP_LINK_POWERMODE_SNIFF;
+                                p += 6;
+                            } else if (p[0] == 'H') {
+                                link -> powermode = IWRAP_LINK_POWERMODE_HOLD;
+                                p += 5;
+                            } else if (p[0] == 'P') {
+                                link -> powermode = IWRAP_LINK_POWERMODE_PARK;
+                                p += 5;
+                            }
+
+                            // {role} = Role of the link. The possible values are:
+                            //   MASTER - iWRAP is the master device of this connection
+                            //   SLAVE - iWRAP is the slave device of this connection
+                            if (p[0] == 'M') {
+                                link -> role = IWRAP_LINK_ROLE_MASTER;
+                                p += 7;
+                            } else {
+                                link -> role = IWRAP_LINK_ROLE_SLAVE;
+                                p += 6;
+                            }
+
+                            // {crypt} = Encryption state of the connection. The possible values are:
+                            //   PLAIN - Connection is not encrypted
+                            //   ENCRYPTED - Connection is encrypted
+                            if (p[0] == 'P') {
+                                link -> role = IWRAP_LINK_CRYPT_PLAIN;
+                                p += 6;
+                            } else {
+                                link -> role = IWRAP_LINK_CRYPT_ENCRYPTED;
+                                p += 10;
+                            }
+
+                            // {buffer} = Tells the amount of data (in bytes) that is stored in the incoming data buffer.
+                            link -> buffer = strtol(p, &p, 10);
+                            p++;
+
+                            // [ERETX] = This flag is visible is enhanced retransmission mode is in use. At the moment only used with HDP connections.
+                            if (p - buffer < bufferPos) Serial.println(p);
+                            link -> eretx = (p - buffer) < bufferPos;
                         }
                         if (expectedRows == 0) {
                             // this happens when all lines are finished
@@ -1124,9 +1233,9 @@ void iWRAP::smartSendData(const char *data, uint16_t length, uint8_t link_id) {
         } else if (config.btSelectedLink != link_id) {
             // currently selected on a different link, so switch
             exitDataMode();
-            while (checkActivity());
+            while (checkActivity(1000));
             selectDataMode(link_id);
-            while (checkActivity());
+            while (checkActivity(1000));
         }
         uModule -> write((const uint8_t *)data, length);
     }

@@ -29,34 +29,58 @@ THE SOFTWARE.
 // NOTE: This demo sketch assumes the use of an Arduino Mega with multiple
 // hardware serial ports. The default "Serial" object is used to communicate
 // with the host PC connected to the board via USB, while the "Serial1" object
-// is used to communicate with a Bluegiga WT12 iWRAP4 module. The WT12 needs
-// a total of 6 connections for most efficient event-driven management
+// is used to communicate with a Bluegiga WT11/WT12 iWRAP4 module. The WT12
+// needs a total of 6 connections for most efficient event-driven management:
 //
-// WT12 GND -> Arduino GND
-// WT12 VDD -> Arduino 3.3v (make SURE this is 3.3v, and not 5v)
-// WT12 RXD -> Arduino TX1 (pin 18)
-// WT12 TXD -> Arduino RX1 (pin 19)
-// WT12 PIO6 -> Arduino INT6
-// WT12 PIO7 -> Arduino INT7
+// BT GND -> Arduino GND
+// BT VDD -> Arduino 3.3v (make SURE this is 3.3v, and not 5v)
+// BT RXD -> Arduino TX1 (pin 18)
+// BT TXD -> Arduino RX1 (pin 19)
+// BT PIO6 -> Arduino INT6
+// BT PIO7 -> Arduino INT7
 //
 // If you are using the Teensy++ 2.0 board instead, the pins are as follows:
 //
-// WT12 GND -> Teensy++ GND
-// WT12 VDD -> Teensy++ VCC (make SURE the Teensy++ is converted to 3.3v!)
-// WT12 RXD -> Teensy++ TX1 (pin 18)
-// WT12 TXD -> Teensy++ RX1 (pin 19)
-// WT12 PIO6 -> Teensy++ INT6 (PE6)
-// WT12 PIO7 -> Teensy++ INT7 (PE7)
+// BT GND -> Teensy++ GND
+// BT VDD -> Teensy++ VCC (make SURE the Teensy++ is converted to 3.3v!)
+// BT RXD -> Teensy++ TX1 (pin 18)
+// BT TXD -> Teensy++ RX1 (pin 19)
+// BT PIO6 -> Teensy++ INT6 (PE6)
+// BT PIO7 -> Teensy++ INT7 (PE7)
 
 #include "iWRAP.h"
-HardwareSerial Serial1 = HardwareSerial();
-iWRAP wt12(&Serial1, (HardwareSerial *)&Serial);
 
-#define LED_PIN 6 // Arduino Mega = 13, Teensy++ = 6
+void onModuleSelectLink(iWRAPLink *link);
 
-#define DTR_PIN 18
-#define LINK_PIN 19
-#define LINK_INT 7
+#define ARDUINO_MEGA    10
+#define TEENSYPP2       20
+
+//#define BOARD ARDUINO_MEGA
+#define BOARD TEENSYPP2
+
+#if BOARD == ARDUINO_MEGA
+
+    iWRAP bluetooth(&Serial1, &Serial);
+    #define LED_PIN 13
+    #define DTR_PIN 18
+    #define LINK_PIN 19
+    #define LINK_INT 7
+
+#elif BOARD == TEENSYPP2
+
+    HardwareSerial Serial1 = HardwareSerial();
+    iWRAP bluetooth(&Serial1, (HardwareSerial *)&Serial);
+    #define LED_PIN 6
+    #define DTR_PIN 18
+    #define LINK_PIN 19
+    #define LINK_INT 7
+
+#else
+
+    #error Unknown board selected. iWRAP demo cannot run like this.
+
+#endif
+
 
 // variables for fun mouse cursor circle tracking
 int8_t x = -16, y = 0;
@@ -96,61 +120,60 @@ void setup() {
     Serial.begin(38400);
 
     // initialize iWRAP device
+    // NOTE: default speed for this WT11/WT12 is 115200. This is not usually possible
+    // unless you are running your microcontroller at 16MHz or more. 38400 works at
+    // pretty much any speed though.
     Serial.println("Initializing iWRAP Bluetooth device serial connection...");
     Serial1.begin(38400);
 
-    // assign special busy/idle callbacks because...well...because we can
-    wt12.onBusy(onModuleBusy);
-    wt12.onIdle(onModuleIdle);
-
     // assign manual control of entering/exiting data mode (uses DTR_PIN)
-    wt12.onSelectLink(onModuleSelectLink);
-    wt12.onExitDataMode(onModuleExitDataMode);
+    bluetooth.onSelectLink(onModuleSelectLink);
+    bluetooth.onExitDataMode(onModuleExitDataMode);
 
     // watch for READY event to further track command mode status
-    wt12.onReady(onModuleReady);
+    bluetooth.onReady(onModuleReady);
 
     // enable local module -> PC passthrough echo for fun/debugging
-    wt12.setEchoModuleOutput(true);
+    bluetooth.setEchoModuleOutput(true);
     
     // check for already active link
     if (digitalRead(LINK_PIN)) {
         linkActive = true;
         Serial.println("Device appears to have active data connection!");
-        wt12.setDeviceMode(IWRAP_MODE_DATA);
+        bluetooth.setDeviceMode(IWRAP_MODE_DATA);
     }
 
     // get all configuration parameters and wait for completion
     Serial.println("Reading iWRAP configuration...");
-    wt12.readDeviceConfig();
-    while (wt12.checkActivity(1000));
-    if (wt12.checkError()) {
+    bluetooth.readDeviceConfig();
+    while (bluetooth.checkActivity(1000));
+    if (bluetooth.checkError()) {
         Serial.println("iWRAP config read generated a syntax error, trying again...");
-        wt12.readDeviceConfig();
-        while (wt12.checkActivity(1000));
+        bluetooth.readDeviceConfig();
+        while (bluetooth.checkActivity(1000));
     }
-    if (wt12.checkError() || wt12.checkTimeout()) {
+    if (bluetooth.checkError() || bluetooth.checkTimeout()) {
         Serial.println("iWRAP config could not be read. Baud rate may be incorrect, or iWRAP stuck in DATA mode?");
     } else {
         // get list of active links
         Serial.println("Reading list link configuration...");
-        wt12.readLinkConfig();
-        while (wt12.checkActivity(1000));
+        bluetooth.readLinkConfig();
+        while (bluetooth.checkActivity(1000));
         
         // enable HID profile if necessary
-        if (!wt12.config.profileHIDEnabled) {
+        if (!bluetooth.config.profileHIDEnabled) {
             Serial.println("Enabling HID profile...");
-            wt12.setProfile("HID", "iWRAP Demo Device");
-            while (wt12.checkActivity(1000));
-            if (wt12.checkError()) {
+            bluetooth.setProfile("HID", "iWRAP Demo Device");
+            while (bluetooth.checkActivity(1000));
+            if (bluetooth.checkError()) {
                 Serial.println("Uh oh, that didn't work out so well.");
             } else {
                 Serial.println("Rebooting iWRAP device again to activate profile...");
-                wt12.resetDevice();
-                while (wt12.checkActivity());
+                bluetooth.resetDevice();
+                while (bluetooth.checkActivity());
                 Serial.println("Re-reading iWRAP configuration...");
-                wt12.readDeviceConfig();
-                while (wt12.checkActivity(1000));
+                bluetooth.readDeviceConfig();
+                while (bluetooth.checkActivity(1000));
             }
         } else {
             Serial.println("Detected HID profile already enabled");
@@ -158,28 +181,28 @@ void setup() {
 
         // set device name for demo
         Serial.println("Setting device name...");
-        wt12.setDeviceName("WT12 iWRAP Demo");
-        while (wt12.checkActivity(1000));
+        bluetooth.setDeviceName("Arduino iWRAPdemo");
+        while (bluetooth.checkActivity(1000));
 
         // set device identity for demo
         Serial.println("Setting device identity...");
-        wt12.setDeviceIdentity("Arduino iWRAPdemo Sketch");
-        while (wt12.checkActivity(1000));
+        bluetooth.setDeviceIdentity("Arduino iWRAPdemo Sketch");
+        while (bluetooth.checkActivity(1000));
 
         // set device class to KB/mouse
         Serial.println("Setting device class to keyboard/mouse...");
-        wt12.setDeviceClass(0x05C0);
-        while (wt12.checkActivity(1000));
+        bluetooth.setDeviceClass(0x05C0);
+        while (bluetooth.checkActivity(1000));
 
         // set SSP mode to 3 0
         Serial.println("Setting Secure Simple Pairing (SSP) mode to 3/0...");
-        wt12.setDeviceSSP(3, 0);
-        while (wt12.checkActivity(1000));
+        bluetooth.setDeviceSSP(3, 0);
+        while (bluetooth.checkActivity(1000));
 
         // enable CD pair notification on GPIO pin 7
         Serial.println("Enabling GPIO7 toggling on Carrier Detect (link active mode)...");
-        wt12.setCarrierDetect(0x80, 0);
-        while (wt12.checkActivity(1000));
+        bluetooth.setCarrierDetect(0x80, 0);
+        while (bluetooth.checkActivity(1000));
 
         // enable GPIO pin 7 interrupt detection
         Serial.println("Attaching interrupt to Carrier Detect pin change (GPIO7)...");
@@ -187,30 +210,30 @@ void setup() {
 
         // enable DTR escape control on GPIO pin 6
         Serial.println("Enabling GPIO6 DTR detection for entering command mode (ESCAPE char disabled)...");
-        wt12.setControlEscape('-', 0x40, 1);
-        while (wt12.checkActivity(1000));
+        bluetooth.setControlEscape('-', 0x40, 1);
+        while (bluetooth.checkActivity(1000));
 
         // output some info to prove we read the config correctly
         Serial.print("+ BT address=");
-        Serial.print(wt12.config.btAddress.address[0], HEX); Serial.print(" ");
-        Serial.print(wt12.config.btAddress.address[1], HEX); Serial.print(" ");
-        Serial.print(wt12.config.btAddress.address[2], HEX); Serial.print(" ");
-        Serial.print(wt12.config.btAddress.address[3], HEX); Serial.print(" ");
-        Serial.print(wt12.config.btAddress.address[4], HEX); Serial.print(" ");
-        Serial.println(wt12.config.btAddress.address[5], HEX);
+        Serial.print(bluetooth.config.btAddress.address[0], HEX); Serial.print(" ");
+        Serial.print(bluetooth.config.btAddress.address[1], HEX); Serial.print(" ");
+        Serial.print(bluetooth.config.btAddress.address[2], HEX); Serial.print(" ");
+        Serial.print(bluetooth.config.btAddress.address[3], HEX); Serial.print(" ");
+        Serial.print(bluetooth.config.btAddress.address[4], HEX); Serial.print(" ");
+        Serial.println(bluetooth.config.btAddress.address[5], HEX);
         Serial.print("+ BT name=");
-        Serial.println(wt12.config.btName);
+        Serial.println(bluetooth.config.btName);
         Serial.print("+ BT IDENT description=");
-        Serial.println(wt12.config.btIdentDescription);
+        Serial.println(bluetooth.config.btIdentDescription);
         Serial.print("+ UART baud rate=");
-        Serial.println(wt12.config.uartBaudRate);
+        Serial.println(bluetooth.config.uartBaudRate);
         Serial.print("+ Current pairing count=");
-        Serial.println(wt12.config.btPairCount);
+        Serial.println(bluetooth.config.btPairCount);
 
         if (digitalRead(LINK_PIN)) {
             Serial.println("Switching back to data mode for previously active link...");
-            wt12.selectDataMode((uint8_t)0); // use default link since we don't know what it was
-            while (wt12.checkActivity(1000));
+            bluetooth.selectDataMode((uint8_t)0); // use default link since we don't know what it was
+            while (bluetooth.checkActivity(1000));
         }
     }
 }
@@ -224,7 +247,7 @@ void loop() {
     // anything that comes in; you must either call this often or else manage
     // reading the data yourself and send it to the parse() method. This method
     // makes a non-blocking implementation easy though.)
-    while (wt12.checkActivity());
+    while (bluetooth.checkActivity());
 
     // check for TIMER1 overflow limit and increment tick (should be every 10 ms)
     // 156 results in 9.937 ms, 157 results in 10.001 ms
@@ -268,22 +291,14 @@ void onModuleExitDataMode() {
     digitalWrite(DTR_PIN, LOW);
     delayMicroseconds(50);
     digitalWrite(DTR_PIN, HIGH);
-    wt12.setDeviceMode(IWRAP_MODE_COMMAND);
-    while (wt12.checkActivity(200));
+    bluetooth.setDeviceMode(IWRAP_MODE_COMMAND);
+    while (bluetooth.checkActivity(200));
     dataMode = false;
 }
 void onModuleSelectLink(iWRAPLink *link) {
     Serial.print("Selecting link ");
     Serial.println(link -> link_id);
     dataMode = true;
-}
-
-void onModuleIdle() {
-    // no command in progress
-}
-
-void onModuleBusy() {
-    // command in progress
 }
 
 void onModuleReady() {

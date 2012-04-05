@@ -68,6 +68,25 @@ THE SOFTWARE.
 #define IWRAP_KILL_REASON_POWEROFF  0x115
 #define IWRAP_INFO_BOOTMODE         2
 
+// iWRAP4 User Guide Section 5.26, LIST
+#define IWRAP_LINK_MODE_RFCOMM          0
+#define IWRAP_LINK_MODE_L2CAP           1
+#define IWRAP_LINK_MODE_SCO             2
+
+#define IWRAP_LINK_DIRECTION_OUTGOING   0
+#define IWRAP_LINK_DIRECTION_INCOMING   1
+
+#define IWRAP_LINK_POWERMODE_ACTIVE     0
+#define IWRAP_LINK_POWERMODE_SNIFF      1
+#define IWRAP_LINK_POWERMODE_HOLD       2
+#define IWRAP_LINK_POWERMODE_PARK       3
+
+#define IWRAP_LINK_ROLE_MASTER          0
+#define IWRAP_LINK_ROLE_SLAVE           1
+
+#define IWRAP_LINK_CRYPT_PLAIN          0
+#define IWRAP_LINK_CRYPT_ENCRYPTED      1
+
 // iWRAP4 User Guide Section 5.43, SET BT CLASS
 // see also http://bluetooth-pentest.narod.ru/software/bluetooth_class_of_device-service_generator.html
 
@@ -461,8 +480,8 @@ class iWRAPLink {
     public:
         uint8_t link_id;
         uint8_t mode;
-        uint8_t blocksize;
-        uint32_t elapse_time;
+        uint16_t blocksize;
+        uint32_t elapsed_time;
         uint8_t local_msc;
         uint8_t remote_msc;
         iWRAPAddress addr;
