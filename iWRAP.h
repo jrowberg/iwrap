@@ -29,13 +29,7 @@ THE SOFTWARE.
 #ifndef _IWRAP_H_
 #define _IWRAP_H_
 
-#ifdef LUFA_ARDUINO_WRAPPER
-    #include "ArduinoWrapper.h"
-#endif
-
-#ifndef LUFA_ARDUINO_WRAPPER
-    #include "Arduino.h"
-#endif
+#include "Arduino.h"
 
 #define IWRAP_VERSION 400
 //#define IWRAP_VERSION 410

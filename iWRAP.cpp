@@ -27,11 +27,6 @@ THE SOFTWARE.
 */
 
 #include "iWRAP.h"
-//#include "debug.h"
-
-#ifdef round
-    #undef round
-#endif
 
 void iWRAPAddress::parseHexAddress(const char *str) {
     if (str == NULL) return; // oops
