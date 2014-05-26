@@ -4,16 +4,20 @@ The iWRAP library is a generic implementation of parser for the AT-style command
 
 This means the module will generate output like *this*:
 
-    RING 0 a8:7b:39:c3:ca:99 3 HFP
-    HFP 0 BSRF 49
-    HFP 0 NETWORK "Verizon"
-    NO CARRIER 0 ERROR 113 HCI_ERROR_OETC_USER
+```
+RING 0 a8:7b:39:c3:ca:99 3 HFP
+HFP 0 BSRF 49
+HFP 0 NETWORK "Verizon"
+NO CARRIER 0 ERROR 113 HCI_ERROR_OETC_USER
+```
 
 ...and all you have to do is feed the incoming serial data into the parser, which will trigger callbacks you can define (or not) in your code like *this*:
 
-    iwrap_evt_ring(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
-    iwrap_evt_hfp(uint8_t link_id, const char *type, const char *detail);
-    iwrap_evt_no_carrier(uint8_t link_id, uint16_t error_code, const char *message);
+```c++
+iwrap_evt_ring(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
+iwrap_evt_hfp(uint8_t link_id, const char *type, const char *detail);
+iwrap_evt_no_carrier(uint8_t link_id, uint16_t error_code, const char *message);
+```
 
 Although there are examples for a few different platforms, the main part of the library is written to be as platform-agnostic as possible using pure ANSI C. There are no host-specific input or output routines like **printf()** or **Serial.write()**, but instead only data processing and callbacks, along with a few helper functions. All you need to do is add a little magic specific to your host to implement the UART hardware interfacing required, and then just write event handlers for whatever parts of iWRAP's functionality you want to harness.
 
@@ -30,6 +34,8 @@ It doesn't take a lot of effort to start using iWRAP on a Bluegiga module, which
  2. Connect RXD, TXD, and GND pins to host device; signals are 3.3v UART
  3. Connect RTS and CTS pins to host device for hardware flow control ***(OPTIONAL)***
  4. See selected module's datasheet for other connection details specific to your application
+
+Pin assignments for certain hosts are included in the host-specific subfolders in this repository (for example, the Arduino README file includes notes about the Arduino Uno, Arduino Pro Mini, Arduino Leonardo, Arduino Mega, Teensy 2.0, and Teensy++ 2.0).
 
 ### Module Firmware
 
@@ -72,8 +78,10 @@ iWRAP has standard behavior that works pretty well, but there are some tweaks th
 
 Enabling MUX mode in iWRAP will cause all incoming and outgoing data to be wrapped in binary MUX frames (starting with 0xBF), as described in the iWRAP User Guide. This setting persists across resets and will make manual communication through a serial terminal **very difficult**. MUX mode is fantastic for microcontrollers, but not so much for humans. If you need to disable MUX mode after enabling it, you can use Realterm's "Send" tab and "Send Numbers" button with the following string of hex codes:
 
-    $BF $FF $00 $11 $53 $45 $54 $20 $43 $4f $4e $54 $52 $4f $4c $20 $4d $55 $58 $20 $30 $00
+```
+$BF $FF $00 $11 $53 $45 $54 $20 $43 $4f $4e $54 $52 $4f $4c $20 $4d $55 $58 $20 $30 $00
+```
 
-*It is also possible to disable this with PSTool and BCSP+UART or the SPI interface, though this is generally more complicated than using UART.*
+It is also possible to disable this with PSTool and BCSP+UART or the SPI interface, though this is generally more complicated than using UART.
 
 ---
