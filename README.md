@@ -21,6 +21,8 @@ iwrap_evt_no_carrier(uint8_t link_id, uint16_t error_code, const char *message);
 
 Although there are examples for a few different platforms, the main part of the library is written to be as platform-agnostic as possible using pure ANSI C. There are no host-specific input or output routines like **printf()** or **Serial.write()**, but instead only data processing and callbacks, along with a few helper functions. All you need to do is add a little magic specific to your host to implement the UART hardware interfacing required, and then just write event handlers for whatever parts of iWRAP's functionality you want to harness.
 
+***Not all event/response callbacks are currently implemented yet in the `iwrap_parse()` function. These will be added over time, or you can add them yourself if necessary.***
+
 ***=== PLEASE READ THE "IMPORTANT NOTES" SECTION AT THE END OF THIS DOCUMENT, ESPECIALLY THE PART CONCERNING MUX MODE ===***
 
 ---
