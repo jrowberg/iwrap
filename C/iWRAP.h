@@ -1,7 +1,9 @@
 // iWRAP external host controller library
-// 2014-05-25 by Jeff Rowberg <jeff@rowberg.net>
+// 2014-07-03 by Jeff Rowberg <jeff@rowberg.net>
 //
 // Changelog:
+//  2014-07-03 - Fix "LIST" result response numeric base for "channel" parameter
+//  2014-05-31 - Add convenience function/callbacks for sending MUX frames to data links
 //  2014-05-25 - Initial release
 
 /* ============================================
@@ -44,8 +46,9 @@ THE SOFTWARE.
     #define IWRAP_INCLUDE_MUX                           // READY
 
     #define IWRAP_INCLUDE_TXCOMMAND                     // READY
+    #define IWRAP_INCLUDE_TXDATA                        // READY
     #define IWRAP_INCLUDE_RXOUTPUT                      // READY
-    #define IWRAP_INCLUDE_DATA                          // READY
+    #define IWRAP_INCLUDE_RXDATA                        // READY
     #define IWRAP_INCLUDE_BUSY                          // READY
     #define IWRAP_INCLUDE_IDLE                          // READY
 
@@ -53,10 +56,10 @@ THE SOFTWARE.
     #define IWRAP_INCLUDE_RSP_AT                        // NOT IMPLEMENTED
     #define IWRAP_INCLUDE_RSP_BER                       // NOT IMPLEMENTED
     #define IWRAP_INCLUDE_RSP_CALL                      // READY
-    #define IWRAP_INCLUDE_RSP_HID_GET                   // NOT IMPLEMENTED
+    #define IWRAP_INCLUDE_RSP_HID_GET                   // READY
     #define IWRAP_INCLUDE_RSP_INFO                      // READY
-    #define IWRAP_INCLUDE_RSP_INQUIRY_COUNT             // NOT IMPLEMENTED
-    #define IWRAP_INCLUDE_RSP_INQUIRY_RESULT            // NOT IMPLEMENTED
+    #define IWRAP_INCLUDE_RSP_INQUIRY_COUNT             // READY
+    #define IWRAP_INCLUDE_RSP_INQUIRY_RESULT            // READY
     #define IWRAP_INCLUDE_RSP_LIST_COUNT                // READY
     #define IWRAP_INCLUDE_RSP_LIST_RESULT               // READY
     #define IWRAP_INCLUDE_RSP_OBEX                      // NOT IMPLEMENTED
@@ -92,15 +95,17 @@ THE SOFTWARE.
     #define IWRAP_INCLUDE_EVT_CLOCK                     // NOT IMPLEMENTED
     #define IWRAP_INCLUDE_EVT_CONNAUTH                  // NOT IMPLEMENTED
     #define IWRAP_INCLUDE_EVT_CONNECT                   // READY
-    #define IWRAP_INCLUDE_EVT_HID                       // NOT IMPLEMENTED
+    #define IWRAP_INCLUDE_EVT_HID_OUTPUT                // READY
+    #define IWRAP_INCLUDE_EVT_HID_SUSPEND               // READY
     #define IWRAP_INCLUDE_EVT_HFP                       // READY
-    #define IWRAP_INCLUDE_EVT_IDENT                     // NOT IMPLEMENTED
-    #define IWRAP_INCLUDE_EVT_IDENT_ERROR               // NOT IMPLEMENTED
-    #define IWRAP_INCLUDE_EVT_INQUIRY_EXTENDED          // NOT IMPLEMENTED
-    #define IWRAP_INCLUDE_EVT_INQUIRY_PARTIAL           // NOT IMPLEMENTED
+    #define IWRAP_INCLUDE_EVT_HFP_AG                    // READY
+    #define IWRAP_INCLUDE_EVT_IDENT                     // READY
+    #define IWRAP_INCLUDE_EVT_IDENT_ERROR               // READY
+    #define IWRAP_INCLUDE_EVT_INQUIRY_EXTENDED          // READY
+    #define IWRAP_INCLUDE_EVT_INQUIRY_PARTIAL           // READY
     #define IWRAP_INCLUDE_EVT_NO_CARRIER                // READY
-    #define IWRAP_INCLUDE_EVT_NAME                      // NOT IMPLEMENTED
-    #define IWRAP_INCLUDE_EVT_NAME_ERROR                // NOT IMPLEMENTED
+    #define IWRAP_INCLUDE_EVT_NAME                      // READY
+    #define IWRAP_INCLUDE_EVT_NAME_ERROR                // READY
     #define IWRAP_INCLUDE_EVT_OBEX_AUTH                 // NOT IMPLEMENTED
     #define IWRAP_INCLUDE_EVT_OK                        // READY
     #define IWRAP_INCLUDE_EVT_PAIR                      // NOT IMPLEMENTED
@@ -142,9 +147,10 @@ typedef struct {
 } iwrap_address_t;
 
 uint8_t iwrap_send_command(const char *cmd, uint8_t mode);
+uint8_t iwrap_send_data(uint8_t channel, uint16_t data_len, const uint8_t *data, uint8_t mode);
 uint8_t iwrap_parse(uint8_t b, uint8_t mode);
 #ifdef IWRAP_INCLUDE_MUX
-    uint8_t iwrap_pack_mux_frame(uint8_t channel, uint16_t length, uint8_t *in, uint16_t *out_len, uint8_t **out);
+    uint8_t iwrap_pack_mux_frame(uint8_t channel, uint16_t in_len, uint8_t *in, uint16_t *out_len, uint8_t **out);
     uint8_t iwrap_unpack_mux_frame(uint16_t in_len, uint8_t *in, uint8_t *channel, uint8_t *flags, uint16_t *length, uint8_t **out, uint8_t copy);
 #endif
 
@@ -164,11 +170,14 @@ extern int (*iwrap_output)(int length, unsigned char *data);
 #ifdef IWRAP_INCLUDE_TXCOMMAND
     extern void (*iwrap_callback_txcommand)(uint16_t length, const uint8_t *data);
 #endif
+#ifdef IWRAP_INCLUDE_TXDATA
+    extern void (*iwrap_callback_txdata)(uint8_t channel, uint16_t length, const uint8_t *data);
+#endif
 #ifdef IWRAP_INCLUDE_RXOUTPUT
     extern void (*iwrap_callback_rxoutput)(uint16_t length, const uint8_t *data);
 #endif
-#ifdef IWRAP_INCLUDE_DATA
-    extern void (*iwrap_callback_data)(uint8_t channel, uint16_t length, const uint8_t *data);
+#ifdef IWRAP_INCLUDE_RXDATA
+    extern void (*iwrap_callback_rxdata)(uint8_t channel, uint16_t length, const uint8_t *data);
 #endif
 
 #ifdef IWRAP_INCLUDE_BUSY
@@ -200,7 +209,7 @@ extern int (*iwrap_output)(int length, unsigned char *data);
     extern void (*iwrap_rsp_inquiry_count)(uint8_t num_of_devices);
 #endif
 #ifdef IWRAP_INCLUDE_RSP_INQUIRY_RESULT
-    extern void (*iwrap_rsp_inquiry_result)(const iwrap_address_t *bd_addr, uint32_t class_of_device);
+    extern void (*iwrap_rsp_inquiry_result)(const iwrap_address_t *bd_addr, uint32_t class_of_device, int8_t rssi);
 #endif
 #ifdef IWRAP_INCLUDE_RSP_LIST_COUNT
     extern void (*iwrap_rsp_list_count)(uint8_t num_of_connections);
@@ -305,11 +314,17 @@ extern int (*iwrap_output)(int length, unsigned char *data);
 #ifdef IWRAP_INCLUDE_EVT_CONNECT
     extern void (*iwrap_evt_connect)(uint8_t link_id, const char *profile, uint16_t target, const iwrap_address_t *address);
 #endif
-#ifdef IWRAP_INCLUDE_EVT_HID
-    extern void (*iwrap_evt_hid)(uint8_t link_id, uint16_t data_length, const uint8_t *data);
+#ifdef IWRAP_INCLUDE_EVT_HID_OUTPUT
+    extern void (*iwrap_evt_hid_output)(uint8_t link_id, uint16_t data_length, const uint8_t *data);
+#endif
+#ifdef IWRAP_INCLUDE_EVT_HID_SUSPEND
+    extern void (*iwrap_evt_hid_suspend)(uint8_t link_id);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_HFP
     extern void (*iwrap_evt_hfp)(uint8_t link_id, const char *type, const char *detail);
+#endif
+#ifdef IWRAP_INCLUDE_EVT_HFP_AG
+    extern void (*iwrap_evt_hfp_ag)(uint8_t link_id, const char *type, const char *detail);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_IDENT
     extern void (*iwrap_evt_ident)(const char *src, uint16_t vendor_id, uint16_t product_id, const char *version, const char *descr);
@@ -348,7 +363,7 @@ extern int (*iwrap_output)(int length, unsigned char *data);
     extern void (*iwrap_evt_ready)();
 #endif
 #ifdef IWRAP_INCLUDE_EVT_RING
-    extern void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
+    extern void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint16_t channel, const char *profile);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_SSPAUTH
     extern void (*iwrap_evt_sspauth)(const iwrap_address_t *bd_addr);
