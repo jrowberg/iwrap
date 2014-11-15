@@ -2,6 +2,7 @@
 // 2014-07-03 by Jeff Rowberg <jeff@rowberg.net>
 //
 // Changelog:
+//  2014-11-15 - Fix "RING" event numeric base for "channel" parameter
 //  2014-07-03 - Fix "LIST" result response numeric base for "channel" parameter
 //  2014-05-31 - Add convenience function/callbacks for sending MUX frames to data links
 //  2014-05-25 - Initial release
@@ -616,7 +617,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                             iwrap_evt_ring(link_id, &address, 0, profile);
                         } else {
                             // not SCO
-                            uint16_t channel = strtol(test, &test, 10); test++;
+                            uint16_t channel = strtol(test, &test, 16); test++;
                             char *profile = test;
                             test = strchr(test, ' ');
                             test[0] = 0; // null terminate for in-place string access to "mode" w/o reallocation
