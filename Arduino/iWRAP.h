@@ -1,7 +1,8 @@
 // iWRAP external host controller library
-// 2014-07-03 by Jeff Rowberg <jeff@rowberg.net>
+// 2014-12-06 by Jeff Rowberg <jeff@rowberg.net>
 //
 // Changelog:
+//  2014-12-06 - Add missing parser reset when MUX frame error occurs
 //  2014-11-15 - Fix "RING" event numeric base for "channel" parameter
 //  2014-07-03 - Fix "LIST" result response numeric base for "channel" parameter
 //  2014-05-31 - Add convenience function/callbacks for sending MUX frames to data links
