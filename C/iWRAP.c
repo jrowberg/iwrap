@@ -1,7 +1,8 @@
 // iWRAP external host controller library
-// 2014-12-06 by Jeff Rowberg <jeff@rowberg.net>
+// 2015-04-27 by Jeff Rowberg <jeff@rowberg.net>
 //
 // Changelog:
+//  2015-04-27 - Fix MUX frame parser "length" value code
 //  2014-12-06 - Add missing parser reset when MUX frame error occurs
 //  2014-11-15 - Fix "RING" event numeric base for "channel" parameter
 //  2014-07-03 - Fix "LIST" result response numeric base for "channel" parameter
@@ -10,7 +11,7 @@
 
 /* ============================================
 iWRAP host controller library code is placed under the MIT license
-Copyright (c) 2014 Jeff Rowberg
+Copyright (c) 2015 Jeff Rowberg
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -777,8 +778,8 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
         if ((in[1] ^ 0xFF) != in[in_len - 1]) { return 3; }   // checksum failure
         
         *channel = in[1];
-        *flags = in[2];
-        *length = in[3];
+        *flags = in[2] >> 3;
+        *length = in[3] | ((in[2] & 0x07) << 8);
         
         if (copy) {
             // allocate enough memory for the payload data
