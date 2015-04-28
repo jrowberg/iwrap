@@ -755,7 +755,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
         *out_len = in_len + 5;
         (*out)[0] = 0xBF;
         (*out)[1] = channel;
-        (*out)[2] = 0x00 | ((in_len >> 8) & 0x07); // flags = 0 always in latest iWRAP (2014-05-05)
+        (*out)[2] = 0x00 | ((in_len >> 8) & 0x03); // flags = 0 always in latest iWRAP (2014-05-05)
         (*out)[3] = in_len;
         memcpy((*out) + 4, in, in_len);
         (*out)[in_len + 4] = channel ^ 0xFF;
@@ -774,12 +774,12 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
      * @return Result code (non-zero indicates error)
      */
     uint8_t iwrap_unpack_mux_frame(uint16_t in_len, uint8_t *in, uint8_t *channel, uint8_t *flags, uint16_t *length, uint8_t **out, uint8_t copy) {
-        if (in_len < 5 || in[0] != 0xBF) { return 2; }      // invalid MUX frame size/format
-        if ((in[1] ^ 0xFF) != in[in_len - 1]) { return 3; }   // checksum failure
+        if (in_len < 5 || in[0] != 0xBF) { return 2; }          // invalid MUX frame size/format
+        if ((in[1] ^ 0xFF) != in[in_len - 1]) { return 3; }     // checksum failure
         
         *channel = in[1];
-        *flags = in[2] >> 3;
-        *length = in[3] | ((in[2] & 0x07) << 8);
+        *flags = in[2] >> 2;
+        *length = in[3] | ((in[2] & 0x03) << 8);
         
         if (copy) {
             // allocate enough memory for the payload data
