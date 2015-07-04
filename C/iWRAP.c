@@ -1,7 +1,8 @@
 // iWRAP external host controller library
-// 2015-04-27 by Jeff Rowberg <jeff@rowberg.net>
+// 2015-07-03 by Jeff Rowberg <jeff@rowberg.net>
 //
 // Changelog:
+//  2015-07-03 - Fix signed/unsigned compiler warnings in Arduino 1.6.5
 //  2015-04-27 - Fix MUX frame parser "length" value code
 //  2014-12-06 - Add missing parser reset when MUX frame error occurs
 //  2014-11-15 - Fix "RING" event numeric base for "channel" parameter
@@ -179,7 +180,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
         iwrap_in_packet = 1;
         
         // check for a complete packet
-        if ((mode == IWRAP_MODE_MUX && iwrap_rx_packet_length > 4 && iwrap_rx_packet_length == iwrap_rx_packet[3] + 5) || (mode != IWRAP_MODE_MUX && b == '\n')) {
+        if ((mode == IWRAP_MODE_MUX && iwrap_rx_packet_length > 4 && iwrap_rx_packet_length == (uint16_t)(iwrap_rx_packet[3] + 5)) || (mode != IWRAP_MODE_MUX && b == '\n')) {
             // validate all correct packet
             if (mode == IWRAP_MODE_MUX) {
                 #ifdef IWRAP_INCLUDE_MUX
@@ -221,7 +222,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
             // debug output
             #ifdef IWRAP_DEBUG
                 if (iwrap_debug) {
-                    int i;
+                    uint16_t i;
                     iwrap_debug("<= RX ");
                     iwrap_debug_hex(iwrap_rx_packet_channel);
                     iwrap_debug(", ");
@@ -306,7 +307,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         test++;
                         uint16_t target = strtol(test, &test, 16); test++;
                         iwrap_address_t mac;
-                        if ((iwrap_tptr - (uint8_t *)test) + 17 < iwrap_rx_payload_length) {
+                        if ((uint16_t)((iwrap_tptr - (uint8_t *)test) + 17) < iwrap_rx_payload_length) {
                             // optional [address] parameter present
                             iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
                             iwrap_evt_connect(link_id, profile, target, &mac);
@@ -404,7 +405,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         uint16_t error_code = strtol(test, &test, 16); test++;
                         iwrap_address_t mac;
                         iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
-                        if ((iwrap_tptr - (uint8_t *)test) + 3 < iwrap_rx_payload_length) {
+                        if ((uint16_t)((iwrap_tptr - (uint8_t *)test) + 3) < iwrap_rx_payload_length) {
                             // optional [message] parameter present
                             iwrap_tptr[iwrap_rx_payload_length - 2] = 0; // null terminate
                             iwrap_evt_ident_error(error_code, &mac, test);
@@ -548,7 +549,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         uint16_t error_code = strtol(test, &test, 16); test++;
                         iwrap_address_t mac;
                         iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
-                        if ((iwrap_tptr - (uint8_t *)test) + 3 < iwrap_rx_payload_length) {
+                        if ((uint16_t)((iwrap_tptr - (uint8_t *)test) + 3) < iwrap_rx_payload_length) {
                             // optional [message] parameter present
                             iwrap_tptr[iwrap_rx_payload_length - 2] = 0; // null terminate
                             iwrap_evt_name_error(error_code, &mac, test);
