@@ -37,6 +37,10 @@ THE SOFTWARE.
 #ifndef _IWRAP_H_
 #define _IWRAP_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 #ifndef IWRAP_CONFIGURED
@@ -383,6 +387,10 @@ extern int (*iwrap_output)(int length, unsigned char *data);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_VOLUME
     extern void (*iwrap_evt_volume)(uint8_t volume);
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif /* _IWRAP_H_ */
