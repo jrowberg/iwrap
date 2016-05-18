@@ -420,7 +420,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                       #ifdef IWRAP_INCLUDE_RSP_INQUIRY_COUNT
                         // INQUIRY {num_of_devices} 
                         if (iwrap_rsp_inquiry_count) {
-                            char *test = (char *)iwrap_tptr + 5;
+                            char *test = (char *)iwrap_tptr + 8;
                             uint8_t num_of_devices = strtol(test, &test, 10);
                             iwrap_rsp_inquiry_count(num_of_devices);
                         }
@@ -428,7 +428,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                     } else {
                       #ifdef IWRAP_INCLUDE_RSP_INQUIRY_RESULT
                         // INQUIRY {addr} {class_of_device} [rssi]
-                        if (iwrap_rsp_list_result) {
+                        if (iwrap_rsp_inquiry_result) {
                             char *test = (char *)iwrap_tptr + 8;
                             iwrap_address_t mac;
                             iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
