@@ -367,7 +367,7 @@ extern int (*iwrap_output)(int length, unsigned char *data);
     extern void (*iwrap_evt_ready)();
 #endif
 #ifdef IWRAP_INCLUDE_EVT_RING
-    extern void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint16_t channel, const char *profile);
+    extern void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_SSPAUTH
     extern void (*iwrap_evt_sspauth)(const iwrap_address_t *bd_addr);

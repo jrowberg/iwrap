@@ -641,12 +641,11 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         uint8_t link_id = strtol(test, &test, 10); test++;
                         iwrap_address_t address;
                         iwrap_hexstrtobin(test, &test, address.address, 0); test++;
-                        if (test[0] == 'S') {
+                        if (strncmp(test, "SCO", 3) == 0) {
                             // SCO (no "channel" parameter)
                             char *profile = test;
-                            test = strchr(test, ' ');
-                            test[0] = 0; // null terminate for in-place string access to "mode" w/o reallocation
-                            iwrap_evt_ring(link_id, &address, 0, profile);
+                            test[3] = 0;
+                            iwrap_evt_ring(link_id, &address, 0xFF, profile);
                         } else {
                             // not SCO
                             uint16_t channel = strtol(test, &test, 16); test++;
@@ -1110,7 +1109,7 @@ int (*iwrap_output)(int length, unsigned char *data);
     void (*iwrap_evt_ready)();
 #endif
 #ifdef IWRAP_INCLUDE_EVT_RING
-    void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint16_t channel, const char *profile);
+    void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_SSPAUTH
     void (*iwrap_evt_sspauth)(const iwrap_address_t *bd_addr);
