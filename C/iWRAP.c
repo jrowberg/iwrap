@@ -601,6 +601,17 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                       #endif
                     }
               #endif
+	      #ifdef IWRAP_INCLUDE_EVT_AUTH
+                } else if (strncmp((char *)iwrap_tptr, "AUTH ", 5) == 0 &&
+				iwrap_tptr[7] == ':' && iwrap_tptr[22] == '?') {
+                    // AUTH {bd_addr}?
+                    if (iwrap_evt_auth) {
+                        char *test = (char *)iwrap_tptr + 5;
+                        iwrap_address_t mac;
+                        iwrap_hexstrtobin(test, &test, mac.address, 17);
+                        iwrap_evt_auth(&mac);
+                    }
+	      #endif
               #ifdef IWRAP_INCLUDE_EVT_READY
                 } else if (strncmp((char *)iwrap_tptr, "READY", 5) == 0) {
                     // READY.
