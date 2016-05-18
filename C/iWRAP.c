@@ -612,6 +612,18 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         iwrap_evt_auth(&mac);
                     }
 	      #endif
+              #ifdef IWRAP_INCLUDE_RSP_RSSI
+                } else if (strncmp((char *)iwrap_tptr, "RSSI", 4) == 0) {
+                    // RSSI {bd_addr} {rssi}
+                    if (iwrap_rsp_rssi) {
+                         char *test = (char *)iwrap_tptr + 5;
+			 int8_t rssi;
+                         iwrap_address_t mac;
+                         iwrap_hexstrtobin(test, &test, mac.address, 0); test++; // advance to first " character
+                         rssi = strtol(test, &test, 10);
+                         iwrap_rsp_rssi(&mac, rssi);
+                    }
+              #endif
               #ifdef IWRAP_INCLUDE_EVT_READY
                 } else if (strncmp((char *)iwrap_tptr, "READY", 5) == 0) {
                     // READY.
