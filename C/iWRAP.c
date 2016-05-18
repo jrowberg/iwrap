@@ -768,6 +768,10 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
      * @return Result code (non-zero indicates error)
      */
     uint8_t iwrap_pack_mux_frame(uint8_t channel, uint16_t in_len, uint8_t *in, uint16_t *out_len, uint8_t **out) {
+
+	if (in_len > 1024) /* Max mux frame size */
+		return 2;
+
         // allocate enough memory for the whole MUX frame
         *out = (uint8_t *)malloc(in_len + 5);
         
@@ -779,7 +783,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
         (*out)[0] = 0xBF;
         (*out)[1] = channel;
         (*out)[2] = 0x00 | ((in_len >> 8) & 0x03); // flags = 0 always in latest iWRAP (2014-05-05)
-        (*out)[3] = in_len;
+        (*out)[3] = in_len & 0xFF;
         memcpy((*out) + 4, in, in_len);
         (*out)[in_len + 4] = channel ^ 0xFF;
         return 0;
