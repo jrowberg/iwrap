@@ -307,9 +307,9 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         test++;
                         uint16_t target = strtol(test, &test, 16); test++;
                         iwrap_address_t mac;
-                        if ((uint16_t)((iwrap_tptr - (uint8_t *)test) + 17) < iwrap_rx_payload_length) {
+                        if ((uint16_t)(((uint8_t *)test) + 17 - iwrap_tptr) <= iwrap_rx_payload_length) {
                             // optional [address] parameter present
-                            iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
+                            iwrap_hexstrtobin(test, &test, mac.address, 0);
                             iwrap_evt_connect(link_id, profile, target, &mac);
                         } else {
                             iwrap_evt_connect(link_id, profile, target, 0);
