@@ -42,7 +42,7 @@ THE SOFTWARE.
 // mode enabled:
 //
 // MUX frame for "SET CONTROL MUX 0" (disable MUX mode):
-//      $bf $ff $00 $17 $53 $45 $54 $20 $43 $4f $4e $54 $52 $4f $4c $20 $4d $55 $58 $20 $30 $00
+//      $bf $ff $00 $11 $53 $45 $54 $20 $43 $4f $4e $54 $52 $4f $4c $20 $4d $55 $58 $20 $30 $00
 // MUX frame for "SET CONTROL BAUD 38400":
 //      $bf $ff $00 $16 $53 $45 $54 $20 $43 $4f $4e $54 $52 $4f $4c $20 $42 $41 $55 $44 $20 $33 $38 $34 $30 $30 $00
 // MUX frame for "SET CONTROL BAUD 115200":
