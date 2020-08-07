@@ -307,9 +307,9 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         test++;
                         uint16_t target = strtol(test, &test, 16); test++;
                         iwrap_address_t mac;
-                        if ((uint16_t)((iwrap_tptr - (uint8_t *)test) + 17) < iwrap_rx_payload_length) {
+                        if ((uint16_t)(((uint8_t *)test) + 17 - iwrap_tptr) <= iwrap_rx_payload_length) {
                             // optional [address] parameter present
-                            iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
+                            iwrap_hexstrtobin(test, &test, mac.address, 0);
                             iwrap_evt_connect(link_id, profile, target, &mac);
                         } else {
                             iwrap_evt_connect(link_id, profile, target, 0);
@@ -420,7 +420,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                       #ifdef IWRAP_INCLUDE_RSP_INQUIRY_COUNT
                         // INQUIRY {num_of_devices} 
                         if (iwrap_rsp_inquiry_count) {
-                            char *test = (char *)iwrap_tptr + 5;
+                            char *test = (char *)iwrap_tptr + 8;
                             uint8_t num_of_devices = strtol(test, &test, 10);
                             iwrap_rsp_inquiry_count(num_of_devices);
                         }
@@ -428,7 +428,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                     } else {
                       #ifdef IWRAP_INCLUDE_RSP_INQUIRY_RESULT
                         // INQUIRY {addr} {class_of_device} [rssi]
-                        if (iwrap_rsp_list_result) {
+                        if (iwrap_rsp_inquiry_result) {
                             char *test = (char *)iwrap_tptr + 8;
                             iwrap_address_t mac;
                             iwrap_hexstrtobin(test, &test, mac.address, 0); test++;
@@ -601,6 +601,29 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                       #endif
                     }
               #endif
+	      #ifdef IWRAP_INCLUDE_EVT_AUTH
+                } else if (strncmp((char *)iwrap_tptr, "AUTH ", 5) == 0 &&
+				iwrap_tptr[7] == ':' && iwrap_tptr[22] == '?') {
+                    // AUTH {bd_addr}?
+                    if (iwrap_evt_auth) {
+                        char *test = (char *)iwrap_tptr + 5;
+                        iwrap_address_t mac;
+                        iwrap_hexstrtobin(test, &test, mac.address, 17);
+                        iwrap_evt_auth(&mac);
+                    }
+	      #endif
+              #ifdef IWRAP_INCLUDE_RSP_RSSI
+                } else if (strncmp((char *)iwrap_tptr, "RSSI", 4) == 0) {
+                    // RSSI {bd_addr} {rssi}
+                    if (iwrap_rsp_rssi) {
+                         char *test = (char *)iwrap_tptr + 5;
+			 int8_t rssi;
+                         iwrap_address_t mac;
+                         iwrap_hexstrtobin(test, &test, mac.address, 0); test++; // advance to first " character
+                         rssi = strtol(test, &test, 10);
+                         iwrap_rsp_rssi(&mac, rssi);
+                    }
+              #endif
               #ifdef IWRAP_INCLUDE_EVT_READY
                 } else if (strncmp((char *)iwrap_tptr, "READY", 5) == 0) {
                     // READY.
@@ -618,12 +641,11 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
                         uint8_t link_id = strtol(test, &test, 10); test++;
                         iwrap_address_t address;
                         iwrap_hexstrtobin(test, &test, address.address, 0); test++;
-                        if (test[0] == 'S') {
+                        if (strncmp(test, "SCO", 3) == 0) {
                             // SCO (no "channel" parameter)
                             char *profile = test;
-                            test = strchr(test, ' ');
-                            test[0] = 0; // null terminate for in-place string access to "mode" w/o reallocation
-                            iwrap_evt_ring(link_id, &address, 0, profile);
+                            test[3] = 0;
+                            iwrap_evt_ring(link_id, &address, 0xFF, profile);
                         } else {
                             // not SCO
                             uint16_t channel = strtol(test, &test, 16); test++;
@@ -746,6 +768,10 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
      * @return Result code (non-zero indicates error)
      */
     uint8_t iwrap_pack_mux_frame(uint8_t channel, uint16_t in_len, uint8_t *in, uint16_t *out_len, uint8_t **out) {
+
+	if (in_len > 1024) /* Max mux frame size */
+		return 2;
+
         // allocate enough memory for the whole MUX frame
         *out = (uint8_t *)malloc(in_len + 5);
         
@@ -757,7 +783,7 @@ uint8_t iwrap_parse(uint8_t b, uint8_t mode) {
         (*out)[0] = 0xBF;
         (*out)[1] = channel;
         (*out)[2] = 0x00 | ((in_len >> 8) & 0x03); // flags = 0 always in latest iWRAP (2014-05-05)
-        (*out)[3] = in_len;
+        (*out)[3] = in_len & 0xFF;
         memcpy((*out) + 4, in, in_len);
         (*out)[in_len + 4] = channel ^ 0xFF;
         return 0;
@@ -1087,7 +1113,7 @@ int (*iwrap_output)(int length, unsigned char *data);
     void (*iwrap_evt_ready)();
 #endif
 #ifdef IWRAP_INCLUDE_EVT_RING
-    void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint16_t channel, const char *profile);
+    void (*iwrap_evt_ring)(uint8_t link_id, const iwrap_address_t *address, uint8_t channel, const char *profile);
 #endif
 #ifdef IWRAP_INCLUDE_EVT_SSPAUTH
     void (*iwrap_evt_sspauth)(const iwrap_address_t *bd_addr);
